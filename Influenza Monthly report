@@ -1,0 +1,208 @@
+import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.utils import get_column_letter
+
+wb = openpyxl.Workbook()
+ws = wb.active
+ws.title = "AUGUST Flu Report"
+
+# ---------- Styles ----------
+bold = Font(bold=True)
+title_font = Font(bold=True, size=14)
+section_font = Font(bold=True, size=12, color="FFFFFF")
+section_fill = PatternFill("solid", fgColor="1F4E78")
+header_fill = PatternFill("solid", fgColor="D9E1F2")
+total_fill = PatternFill("solid", fgColor="FFF2CC")
+center = Alignment(horizontal="center", vertical="center")
+thin = Side(style="thin", color="999999")
+border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+def style_range(rng, fill=None, font=None, align=None, brd=True):
+    for row in ws[rng]:
+        for c in row:
+            if fill: c.fill = fill
+            if font: c.font = font
+            if align: c.alignment = align
+            if brd: c.border = border
+
+# ---------- Title ----------
+ws["A1"] = "INFLUENZA SURVEILLANCE WEEKLY DATA REPORT – August 2026"
+ws["A1"].font = title_font
+ws.merge_cells("A1:N1")
+ws["A2"] = ("Enter the number of samples received and positive samples. "
+            "Weekly totals and positivity rates are calculated automatically.")
+ws.merge_cells("A2:N2")
+
+sites = ["DAD","IRH","KAK","KNH","MSA","MST","NAK","NYR","SYA"]
+
+# ============================================================
+# SECTION A – DAILY SAMPLE RECEIPT DATA
+# ============================================================
+ws["A4"] = "A. DAILY SAMPLE RECEIPT DATA"
+ws["A4"].font = section_font
+ws["A4"].fill = section_fill
+ws.merge_cells("A4:N4")
+
+headers_A = ["Date","Week"] + sites + ["Total Samples Received"]
+for i, h in enumerate(headers_A, start=1):
+    c = ws.cell(row=5, column=i, value=h)
+    c.font = bold; c.fill = header_fill; c.alignment = center; c.border = border
+
+import datetime
+start = datetime.date(2026, 8, 1)
+for i in range(31):  # 31 days
+    r = 6 + i
+    d = start + datetime.timedelta(days=i)
+    ws.cell(row=r, column=1, value=d).number_format = "yyyy-mm-dd"
+    # Week assignment: 1=1-6, 2=7-13, 3=14-20, 4=21-27, 5=28-31
+    day = d.day
+    if day <= 6: wk = "Week 1"
+    elif day <= 13: wk = "Week 2"
+    elif day <= 20: wk = "Week 3"
+    elif day <= 27: wk = "Week 4"
+    else: wk = "Week 5"
+    ws.cell(row=r, column=2, value=wk)
+    ws.cell(row=r, column=12, value=f"=SUM(C{r}:K{r})")
+
+# Monthly totals row for Table A
+total_row_A = 6 + 31  # row 37
+ws.cell(row=total_row_A, column=1, value="TOTAL RECEIVED").font = bold
+ws.cell(row=total_row_A, column=2, value="")
+for col in range(3, 13):  # C..L
+    L = get_column_letter(col)
+    ws.cell(row=total_row_A, column=col, value=f"=SUM({L}6:{L}36)")
+style_range(f"A{total_row_A}:L{total_row_A}", fill=total_fill, font=bold, align=center)
+style_range("A5:L36", align=center)
+
+# ============================================================
+# SECTION B – WEEKLY SAMPLES RECEIVED (auto from A)
+# ============================================================
+B_start = total_row_A + 2  # row 39
+ws.cell(row=B_start, column=1, value="B. WEEKLY SAMPLES RECEIVED").font = section_font
+ws.cell(row=B_start, column=1).fill = section_fill
+ws.merge_cells(start_row=B_start, start_column=1, end_row=B_start, end_column=12)
+
+hdr_B = B_start + 1
+headers_B = ["Week","Date Range"] + sites + ["Total All Sites"]
+for i, h in enumerate(headers_B, start=1):
+    c = ws.cell(row=hdr_B, column=i, value=h)
+    c.font = bold; c.fill = header_fill; c.alignment = center; c.border = border
+
+week_ranges = {
+    "Week 1": "01-Aug to 06-Aug",
+    "Week 2": "07-Aug to 13-Aug",
+    "Week 3": "14-Aug to 20-Aug",
+    "Week 4": "21-Aug to 27-Aug",
+    "Week 5": "28-Aug to 31-Aug",
+}
+for i, (wk, dr) in enumerate(week_ranges.items()):
+    r = hdr_B + 1 + i
+    ws.cell(row=r, column=1, value=wk)
+    ws.cell(row=r, column=2, value=dr)
+    for col in range(3, 12):  # C..K
+        L = get_column_letter(col)
+        # SUMIFS from Table A (rows 6..36), column B = Week, column L = Total
+        ws.cell(row=r, column=col,
+                value=f'=SUMIFS({L}$6:{L}$36,$B$6:$B$36,$A{r})')
+    ws.cell(row=r, column=12, value=f"=SUM(C{r}:K{r})")
+
+# August TOTAL row
+tot_B = hdr_B + 6
+ws.cell(row=tot_B, column=1, value="August TOTAL").font = bold
+for col in range(3, 13):
+    L = get_column_letter(col)
+    ws.cell(row=tot_B, column=col, value=f"=SUM({L}{hdr_B+1}:{L}{hdr_B+5})")
+style_range(f"A{tot_B}:L{tot_B}", fill=total_fill, font=bold, align=center)
+style_range(f"A{hdr_B}:L{hdr_B+5}", align=center)
+
+# ============================================================
+# SECTION C – WEEKLY INFLUENZA POSITIVITY DATA
+# ============================================================
+C_start = tot_B + 2  # row ~47
+ws.cell(row=C_start, column=1, value="C. WEEKLY INFLUENZA POSITIVITY DATA").font = section_font
+ws.cell(row=C_start, column=1).fill = section_fill
+ws.merge_cells(start_row=C_start, start_column=1, end_row=C_start, end_column=13)
+
+hdr_C = C_start + 1
+headers_C = ["Week","Date Range"] + sites + ["Total Tested","Total Positive","Overall Positivity Rate"]
+for i, h in enumerate(headers_C, start=1):
+    c = ws.cell(row=hdr_C, column=i, value=h)
+    c.font = bold; c.fill = header_fill; c.alignment = center; c.border = border
+
+for i, (wk, dr) in enumerate(week_ranges.items()):
+    r = hdr_C + 1 + i
+    ws.cell(row=r, column=1, value=wk)
+    ws.cell(row=r, column=2, value=dr)
+    # Site columns C..K left blank for fraction input (e.g. 3/12)
+    # L = Total Tested, M = Total Positive (whole numbers)
+    ws.cell(row=r, column=13, value=f"=IFERROR(M{r}/L{r},0)").number_format = "0.0%"
+
+style_range(f"A{hdr_C}:M{hdr_C+5}", align=center)
+# Note about fraction entry
+note_r = hdr_C + 7
+ws.cell(row=note_r, column=1,
+        value="Note: Enter site values as fractions (e.g. 3/12) = positive/tested. "
+              "Total Tested and Total Positive are whole numbers.")
+ws.merge_cells(start_row=note_r, start_column=1, end_row=note_r, end_column=13)
+
+# ============================================================
+# SECTION D – WEEKLY RSV POSITIVITY DATA
+# ============================================================
+D_start = note_r + 2
+ws.cell(row=D_start, column=1, value="D. WEEKLY RSV POSITIVITY DATA").font = section_font
+ws.cell(row=D_start, column=1).fill = section_fill
+ws.merge_cells(start_row=D_start, start_column=1, end_row=D_start, end_column=13)
+
+hdr_D = D_start + 1
+for i, h in enumerate(headers_C, start=1):
+    c = ws.cell(row=hdr_D, column=i, value=h)
+    c.font = bold; c.fill = header_fill; c.alignment = center; c.border = border
+
+for i, (wk, dr) in enumerate(week_ranges.items()):
+    r = hdr_D + 1 + i
+    ws.cell(row=r, column=1, value=wk)
+    ws.cell(row=r, column=2, value=dr)
+    ws.cell(row=r, column=13, value=f"=IFERROR(M{r}/L{r},0)").number_format = "0.0%"
+
+style_range(f"A{hdr_D}:M{hdr_D+5}", align=center)
+
+# ============================================================
+# SECTION E – MONTHLY POSITIVITY SUMMARY BY SITE
+# ============================================================
+E_start = hdr_D + 7
+ws.cell(row=E_start, column=1, value="E. MONTHLY POSITIVITY SUMMARY BY SITE").font = section_font
+ws.cell(row=E_start, column=1).fill = section_fill
+ws.merge_cells(start_row=E_start, start_column=1, end_row=E_start, end_column=7)
+
+hdr_E = E_start + 1
+headers_E = ["Site","Total Flu Tested in August","Total Flu Positive in August",
+             "August Flu Positivity Rate","Total RSV Tested in August",
+             "Total RSV Positive in August","August RSV Positivity Rate"]
+for i, h in enumerate(headers_E, start=1):
+    c = ws.cell(row=hdr_E, column=i, value=h)
+    c.font = bold; c.fill = header_fill; c.alignment = center; c.border = border
+
+for i, s in enumerate(sites):
+    r = hdr_E + 1 + i
+    ws.cell(row=r, column=1, value=s)
+    ws.cell(row=r, column=4, value=f"=IFERROR(C{r}/B{r},0)").number_format = "0.0%"
+    ws.cell(row=r, column=7, value=f"=IFERROR(F{r}/E{r},0)").number_format = "0.0%"
+
+tot_E = hdr_E + 10
+ws.cell(row=tot_E, column=1, value="ALL 9 SITES – August").font = bold
+ws.cell(row=tot_E, column=2, value=f"=SUM(B{hdr_E+1}:B{hdr_E+9})")
+ws.cell(row=tot_E, column=3, value=f"=SUM(C{hdr_E+1}:C{hdr_E+9})")
+ws.cell(row=tot_E, column=4, value=f"=IFERROR(C{tot_E}/B{tot_E},0)").number_format = "0.0%"
+ws.cell(row=tot_E, column=5, value=f"=SUM(E{hdr_E+1}:E{hdr_E+9})")
+ws.cell(row=tot_E, column=6, value=f"=SUM(F{hdr_E+1}:F{hdr_E+9})")
+ws.cell(row=tot_E, column=7, value=f"=IFERROR(F{tot_E}/E{tot_E},0)").number_format = "0.0%"
+style_range(f"A{tot_E}:G{tot_E}", fill=total_fill, font=bold, align=center)
+style_range(f"A{hdr_E}:G{tot_E}", align=center)
+
+# Column widths
+widths = {"A":22,"B":18,"C":8,"D":8,"E":8,"F":8,"G":8,"H":8,"I":8,"J":8,"K":8,"L":14,"M":14,"N":18}
+for col, w in widths.items():
+    ws.column_dimensions[col].width = w
+
+wb.save("Influenza_August_2026_Template.xlsx")
+print("Template saved as Influenza_August_2026_Template.xlsx")
